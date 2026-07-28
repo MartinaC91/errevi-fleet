@@ -1,16 +1,27 @@
-# Errevi Fleet
+# Errevi Fleet - Modulo Mezzi v1
 
-Starter Next.js per la gestione mezzi Errevi Automation.
+Questa versione collega la pagina **Mezzi** alla tabella `public.mezzi` di Supabase e permette:
 
-## Pubblicazione senza installare nulla
+- visualizzazione mezzi;
+- ricerca e filtro per stato;
+- inserimento;
+- modifica;
+- eliminazione;
+- normalizzazione automatica della targa (maiuscolo e senza spazi).
 
-1. Scarica lo ZIP e decomprimilo.
-2. Apri il repository GitHub `MartinaC91/errevi-fleet`.
-3. Usa **Add file > Upload files** e carica tutti i file e le cartelle dello starter.
-4. Conferma con **Commit changes**.
-5. Torna su Vercel e importa il repository oppure rilancia il deploy.
-6. In Vercel, apri **Settings > Environment Variables** e aggiungi:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+## Aggiornamento tramite GitHub
 
-Non inserire mai la secret key nel frontend o su GitHub.
+1. Decomprimi lo ZIP.
+2. Nel repository GitHub `MartinaC91/errevi-fleet` scegli **Add file > Upload files**.
+3. Carica il contenuto della cartella, accettando la sostituzione dei file esistenti.
+4. Esegui il commit. Vercel avvierà automaticamente un nuovo deploy.
+
+## Passaggio Supabase necessario per il test
+
+Apri **Supabase > SQL Editor > New query**, incolla il contenuto di:
+
+`supabase/01-policy-test-mezzi.sql`
+
+e premi **Run**.
+
+Le policy sono esclusivamente temporanee perché il login non è ancora attivo. Prima dell'uso con dati aziendali verranno sostituite con policy basate su autenticazione e ruoli.

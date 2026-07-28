@@ -25,3 +25,24 @@ button { font: inherit; }
 .panel { padding: 22px; }.panelHeader h3 { margin: 4px 0 0; }.emptyState { min-height: 180px; display: grid; place-items: center; text-align: center; color: var(--muted); border: 1px dashed #d4d4d7; border-radius: 12px; margin-top: 18px; padding: 22px; }
 @media (max-width: 900px) { .appShell { grid-template-columns: 1fr; }.sidebar { min-height: auto; }.sidebar nav { grid-template-columns: repeat(2, 1fr); }.cardsGrid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .mainContent { padding: 22px 16px; }.cardsGrid { grid-template-columns: 1fr; }.topbar, .pageIntro { align-items: flex-start; }.sidebar nav { grid-template-columns: 1fr; } }
+.primaryButton { display: inline-flex; align-items: center; gap: 8px; }
+.secondaryButton { border: 1px solid var(--border); border-radius: 10px; background: white; color: var(--gray); padding: 11px 16px; cursor: pointer; font-weight: 700; }
+.errorBanner { margin: 18px 0; padding: 13px 15px; border: 1px solid #f2b8b5; background: #fff3f2; color: #9e201a; border-radius: 10px; }
+.vehiclePanel { margin-top: 24px; padding: 0; overflow: hidden; }
+.toolbar { padding: 18px; display: flex; gap: 12px; border-bottom: 1px solid var(--border); }
+.searchBox { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; background: white; }
+.searchBox input { width: 100%; border: 0; outline: 0; padding: 11px 0; }
+.toolbar select, .vehicleForm input, .vehicleForm select, .vehicleForm textarea { border: 1px solid var(--border); border-radius: 9px; padding: 10px 11px; background: white; color: var(--gray); }
+.tableWrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 920px; }
+th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
+th { background: #fafafa; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+tbody tr:hover { background: #fffafd; }
+.statusBadge { display: inline-flex; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #efefef; }
+.status-disponibile { background: #e8f7ee; color: #247a45; }.status-prenotato { background: #e9f1ff; color: #285fa8; }.status-in_attesa_approvazione { background: #fff6d9; color: #8b6811; }.status-manutenzione_programmata, .status-revisione { background: #f3ebff; color: #6b3ba8; }.status-guasto, .status-fuori_servizio { background: #ffebea; color: #a32924; }
+.rowActions { display: flex; justify-content: flex-end; gap: 5px; }.iconButton { width: 36px; height: 36px; display: inline-grid; place-items: center; border: 1px solid var(--border); background: white; border-radius: 9px; cursor: pointer; color: var(--gray); }.iconButton:hover { border-color: var(--magenta); color: var(--magenta); }.iconButton.danger:hover { border-color: #bd2d27; color: #bd2d27; }
+.modalBackdrop { position: fixed; inset: 0; z-index: 50; background: rgba(18,18,18,.55); display: grid; place-items: center; padding: 20px; }
+.modal { width: min(780px, 100%); max-height: 92vh; overflow: auto; background: white; border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,.25); }
+.modalHeader { padding: 20px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }.modalHeader h3 { margin: 4px 0 0; font-size: 22px; }
+.vehicleForm { padding: 22px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }.vehicleForm label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }.fullField, .checkField, .formActions { grid-column: 1 / -1; }.checkField { display: flex !important; align-items: center; flex-direction: row; }.checkField input { width: auto; }.formActions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px; }
+@media (max-width: 700px) { .toolbar { flex-direction: column; }.vehicleForm { grid-template-columns: 1fr; }.fullField, .checkField, .formActions { grid-column: auto; } }
