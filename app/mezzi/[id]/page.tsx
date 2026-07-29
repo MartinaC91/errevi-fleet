@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { ArrowLeft, Car } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { supabase } from "@/lib/supabase";
@@ -44,8 +44,10 @@ const statusLabels: Record<VehicleStatus, string> = {
 export default function VehicleDetailPage({
   params
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = use(params);
+
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -66,7 +68,7 @@ export default function VehicleDetailPage({
         .select(
           "id,targa,marca,modello,reparto,responsabile,detentore_chiavi,stato,motivo_stato,attivo,note,numero_chiave,km_attuali"
         )
-        .eq("id", params.id)
+        .eq("id", id)
         .single();
 
       if (loadError) {
@@ -79,7 +81,7 @@ export default function VehicleDetailPage({
     }
 
     void loadVehicle();
-  }, [params.id]);
+  }, [id]);
 
   if (loading) {
     return (
@@ -126,11 +128,16 @@ export default function VehicleDetailPage({
         <div className="panelHeader">
           <div>
             <p className="eyebrow">Anagrafica</p>
+
             <h3>
               <Car
                 size={20}
-                style={{ verticalAlign: "middle", marginRight: 8 }}
+                style={{
+                  verticalAlign: "middle",
+                  marginRight: 8
+                }}
               />
+
               {marcaModello}
             </h3>
           </div>
