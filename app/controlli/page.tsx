@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useState } from "react";
 import * as XLSX from "xlsx";
+import { supabase } from "../../lib/supabase";
 
 type RigaExcel = Record<string, unknown>;
 
@@ -10,17 +11,34 @@ type Controllo = {
   numeroChiave: string;
   targa: string;
   dataControllo: string;
+  dataControlloIso: string | null;
   operatore: string;
+  emailOperatore: string;
   km: string;
+  puliziaEsterna: string;
+  puliziaInterna: string;
   spie: string;
   pneumatici: string;
+  urtiDanni: string;
   anomalie: string;
   problemaBloccante: string;
+  allegato: string;
+};
+
+type RisultatoImportazione = {
+  importati: number;
+  duplicati: number;
+  mezziNonTrovati: number;
+  errori: number;
 };
 
 function testo(valore: unknown): string {
   if (valore === null || valore === undefined) return "";
   return String(valore).trim();
+}
+
+function normalizzaTarga(targa: string): string {
+  return targa.replace(/\s+/g, "").toUpperCase();
 }
 
 function extractVehicleInfo(titolo: string) {
@@ -39,7 +57,7 @@ function extractVehicleInfo(titolo: string) {
 
   return {
     numeroChiave: risultato[1].trim(),
-    targa: risultato[2].replace(/\s+/g, "").toUpperCase(),
+    targa: normalizzaTarga(risultato[2]),
   };
 }
 
@@ -56,31 +74,102 @@ function contieneProblema(valore: string): boolean {
     "non presente",
     "n/a",
     "ok",
+    "regolare",
   ];
 
   return !valoriNegativi.includes(valorePulito);
 }
 
-function formattaData(valore: unknown): string {
-  if (!valore) return "";
+function ottieniData(valore: unknown): {
+  visualizzata: string;
+  iso: string | null;
+} {
+  if (!valore) {
+    return {
+      visualizzata: "",
+      iso: null,
+    };
+  }
 
   if (valore instanceof Date && !Number.isNaN(valore.getTime())) {
-    return valore.toLocaleDateString("it-IT");
+    const anno = valore.getFullYear();
+    const mese = String(valore.getMonth() + 1).padStart(2, "0");
+    const giorno = String(valore.getDate()).padStart(2, "0");
+
+    return {
+      visualizzata: valore.toLocaleDateString("it-IT"),
+      iso: `${anno}-${mese}-${giorno}`,
+    };
   }
 
   if (typeof valore === "number") {
     const dataExcel = XLSX.SSF.parse_date_code(valore);
 
     if (dataExcel) {
-      return new Date(
-        dataExcel.y,
-        dataExcel.m - 1,
-        dataExcel.d
-      ).toLocaleDateString("it-IT");
+      const mese = String(dataExcel.m).padStart(2, "0");
+      const giorno = String(dataExcel.d).padStart(2, "0");
+
+      return {
+        visualizzata: `${giorno}/${mese}/${dataExcel.y}`,
+        iso: `${dataExcel.y}-${mese}-${giorno}`,
+      };
     }
   }
 
-  return testo(valore);
+  const valoreTesto = testo(valore);
+
+  const formatoItaliano = valoreTesto.match(
+    /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/
+  );
+
+  if (formatoItaliano) {
+    const giorno = formatoItaliano[1].padStart(2, "0");
+    const mese = formatoItaliano[2].padStart(2, "0");
+    const anno = formatoItaliano[3];
+
+    return {
+      visualizzata: `${giorno}/${mese}/${anno}`,
+      iso: `${anno}-${mese}-${giorno}`,
+    };
+  }
+
+  const formatoIso = valoreTesto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (formatoIso) {
+    return {
+      visualizzata: `${formatoIso[3]}/${formatoIso[2]}/${formatoIso[1]}`,
+      iso: `${formatoIso[1]}-${formatoIso[2]}-${formatoIso[3]}`,
+    };
+  }
+
+  return {
+    visualizzata: valoreTesto,
+    iso: null,
+  };
+}
+
+function convertiKm(valore: string): number | null {
+  if (!valore.trim()) return null;
+
+  const soloNumeri = valore.replace(/[^\d]/g, "");
+
+  if (!soloNumeri) return null;
+
+  const km = Number.parseInt(soloNumeri, 10);
+
+  return Number.isNaN(km) ? null : km;
+}
+
+function creaChiaveUnivoca(controllo: Controllo): string {
+  const mezzo = controllo.numeroChiave || controllo.targa || "sconosciuto";
+  const data = controllo.dataControlloIso || controllo.dataControllo || "senza-data";
+  const km = convertiKm(controllo.km) ?? "senza-km";
+  const operatore = controllo.operatore
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+
+  return `${mezzo}-${data}-${km}-${operatore || "senza-operatore"}`;
 }
 
 export default function ControlliPage() {
@@ -88,6 +177,10 @@ export default function ControlliPage() {
   const [controlli, setControlli] = useState<Controllo[]>([]);
   const [errore, setErrore] = useState("");
   const [caricamento, setCaricamento] = useState(false);
+  const [importazione, setImportazione] = useState(false);
+  const [messaggioImportazione, setMessaggioImportazione] = useState("");
+  const [risultatoImportazione, setRisultatoImportazione] =
+    useState<RisultatoImportazione | null>(null);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -97,6 +190,8 @@ export default function ControlliPage() {
     setFileName(file.name);
     setControlli([]);
     setErrore("");
+    setMessaggioImportazione("");
+    setRisultatoImportazione(null);
     setCaricamento(true);
 
     try {
@@ -127,21 +222,36 @@ export default function ControlliPage() {
           if (!foglioVeicolo || !titolo) return;
 
           const { numeroChiave, targa } = extractVehicleInfo(titolo);
+          const data = ottieniData(riga["DATA CONTROLLO"]);
 
           controlliTrovati.push({
             id: `${nomeFoglio}-${indice}`,
             numeroChiave,
             targa,
-            dataControllo: formattaData(riga["DATA CONTROLLO"]),
+            dataControllo: data.visualizzata,
+            dataControlloIso: data.iso,
             operatore:
               testo(riga["Nome del mittente"]) ||
               testo(riga["Nome"]) ||
               testo(riga["E-mail del mittente"]),
+            emailOperatore:
+              testo(riga["E-mail del mittente"]) ||
+              testo(riga["Email del mittente"]),
             km: testo(riga["KM MEZZO"]),
+            puliziaEsterna: testo(riga["PULIZIA ESTERNA"]),
+            puliziaInterna: testo(riga["PULIZIA INTERNA"]),
             spie: testo(riga["SPIE"]),
             pneumatici: testo(riga["STATO PNEUMATICI"]),
+            urtiDanni:
+              testo(riga["URTI / DANNI"]) ||
+              testo(riga["URTI/DANNI"]) ||
+              testo(riga["URTI E DANNI"]),
             anomalie: testo(riga["ANOMALIE / MALFUNZIONAMENTI"]),
             problemaBloccante: testo(riga["PROBLEMA BLOCCANTE"]),
+            allegato:
+              testo(riga["Allegati"]) ||
+              testo(riga["ALLEGATO"]) ||
+              testo(riga["ALLEGATI"]),
           });
         });
       });
@@ -171,6 +281,173 @@ export default function ControlliPage() {
       );
     } finally {
       setCaricamento(false);
+    }
+  }
+
+  async function trovaMezzo(controllo: Controllo) {
+    if (!supabase) {
+      throw new Error("Supabase non è configurato.");
+    }
+
+    if (controllo.numeroChiave) {
+      const { data, error } = await supabase
+        .from("mezzi")
+        .select("id, numero_chiave, targa, km_attuali")
+        .eq("numero_chiave", controllo.numeroChiave)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) return data;
+    }
+
+    if (controllo.targa) {
+      const { data, error } = await supabase
+        .from("mezzi")
+        .select("id, numero_chiave, targa, km_attuali")
+        .eq("targa", controllo.targa)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) return data;
+
+      const { data: tuttiIMezzi, error: erroreMezzi } = await supabase
+        .from("mezzi")
+        .select("id, numero_chiave, targa, km_attuali");
+
+      if (erroreMezzi) throw erroreMezzi;
+
+      const mezzoConTargaNormalizzata = tuttiIMezzi?.find(
+        (mezzo) => normalizzaTarga(mezzo.targa ?? "") === controllo.targa
+      );
+
+      if (mezzoConTargaNormalizzata) {
+        return mezzoConTargaNormalizzata;
+      }
+    }
+
+    return null;
+  }
+
+  async function importaControlli() {
+    if (!supabase) {
+      setErrore(
+        "Supabase non è configurato. Controlla le variabili ambiente del progetto."
+      );
+      return;
+    }
+
+    if (controlli.length === 0) return;
+
+    const conferma = window.confirm(
+      `Vuoi importare ${controlli.length} controlli in Supabase?`
+    );
+
+    if (!conferma) return;
+
+    setImportazione(true);
+    setErrore("");
+    setMessaggioImportazione("Importazione in corso...");
+    setRisultatoImportazione(null);
+
+    const risultato: RisultatoImportazione = {
+      importati: 0,
+      duplicati: 0,
+      mezziNonTrovati: 0,
+      errori: 0,
+    };
+
+    try {
+      for (const controllo of controlli) {
+        try {
+          const mezzo = await trovaMezzo(controllo);
+
+          if (!mezzo) {
+            risultato.mezziNonTrovati += 1;
+            continue;
+          }
+
+          const chiaveUnivoca = creaChiaveUnivoca(controllo);
+          const km = convertiKm(controllo.km);
+
+          const { data: ispezioneEsistente, error: erroreControllo } =
+            await supabase
+              .from("ispezioni")
+              .select("id")
+              .eq("chiave_univoca", chiaveUnivoca)
+              .maybeSingle();
+
+          if (erroreControllo) throw erroreControllo;
+
+          if (ispezioneEsistente) {
+            risultato.duplicati += 1;
+            continue;
+          }
+
+          const { error: erroreInserimento } = await supabase
+            .from("ispezioni")
+            .insert({
+              mezzo_id: mezzo.id,
+              numero_chiave: controllo.numeroChiave,
+              targa: controllo.targa,
+              data_controllo: controllo.dataControlloIso,
+              data_invio: new Date().toISOString(),
+              operatore: controllo.operatore || null,
+              email_operatore: controllo.emailOperatore || null,
+              km,
+              pulizia_esterna: controllo.puliziaEsterna || null,
+              pulizia_interna: controllo.puliziaInterna || null,
+              spie: controllo.spie || null,
+              stato_pneumatici: controllo.pneumatici || null,
+              urti_danni: controllo.urtiDanni || null,
+              anomalie: controllo.anomalie || null,
+              problema_bloccante: controllo.problemaBloccante || null,
+              allegato: controllo.allegato || null,
+              chiave_univoca: chiaveUnivoca,
+            });
+
+          if (erroreInserimento) {
+            if (erroreInserimento.code === "23505") {
+              risultato.duplicati += 1;
+              continue;
+            }
+
+            throw erroreInserimento;
+          }
+
+          if (km !== null) {
+            const kmAttuali =
+              typeof mezzo.km_attuali === "number" ? mezzo.km_attuali : 0;
+
+            if (km >= kmAttuali) {
+              const { error: erroreAggiornamento } = await supabase
+                .from("mezzi")
+                .update({ km_attuali: km })
+                .eq("id", mezzo.id);
+
+              if (erroreAggiornamento) throw erroreAggiornamento;
+            }
+          }
+
+          risultato.importati += 1;
+        } catch (error) {
+          console.error("Errore durante l'importazione del controllo:", error);
+          risultato.errori += 1;
+        }
+      }
+
+      setRisultatoImportazione(risultato);
+
+      setMessaggioImportazione(
+        risultato.errori === 0
+          ? "Importazione completata."
+          : "Importazione completata con alcuni errori."
+      );
+    } catch (error) {
+      console.error(error);
+      setErrore("Si è verificato un errore durante l'importazione.");
+      setMessaggioImportazione("");
+    } finally {
+      setImportazione(false);
     }
   }
 
@@ -250,6 +527,51 @@ export default function ControlliPage() {
               <span style={stili.etichettaCard}>Problemi bloccanti</span>
             </div>
           </section>
+
+          <section style={stili.areaImportazione}>
+            <div>
+              <h2 style={stili.titoloImportazione}>
+                Importazione nel gestionale
+              </h2>
+
+              <p style={stili.testoImportazione}>
+                I controlli già presenti saranno riconosciuti e non verranno
+                duplicati.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={importaControlli}
+              disabled={importazione}
+              style={{
+                ...stili.pulsanteImportazione,
+                ...(importazione ? stili.pulsanteDisabilitato : {}),
+              }}
+            >
+              {importazione
+                ? "Importazione in corso..."
+                : "Importa in Supabase"}
+            </button>
+          </section>
+
+          {messaggioImportazione && (
+            <section style={stili.esitoImportazione}>
+              <strong>{messaggioImportazione}</strong>
+
+              {risultatoImportazione && (
+                <div style={stili.grigliaEsito}>
+                  <span>✅ Importati: {risultatoImportazione.importati}</span>
+                  <span>↩️ Già presenti: {risultatoImportazione.duplicati}</span>
+                  <span>
+                    🚗 Mezzi non trovati:{" "}
+                    {risultatoImportazione.mezziNonTrovati}
+                  </span>
+                  <span>⚠️ Errori: {risultatoImportazione.errori}</span>
+                </div>
+              )}
+            </section>
+          )}
 
           <section style={stili.sezioneTabella}>
             <h2 style={stili.titoloTabella}>Anteprima controlli</h2>
@@ -426,6 +748,61 @@ const stili: Record<string, React.CSSProperties> = {
   etichettaCard: {
     marginTop: "5px",
     color: "#666666",
+  },
+
+  areaImportazione: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "24px",
+    flexWrap: "wrap",
+    marginTop: "24px",
+    padding: "24px",
+    borderRadius: "12px",
+    backgroundColor: "#ffffff",
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+  },
+
+  titoloImportazione: {
+    margin: 0,
+    fontSize: "20px",
+  },
+
+  testoImportazione: {
+    marginTop: "7px",
+    marginBottom: 0,
+    color: "#666666",
+  },
+
+  pulsanteImportazione: {
+    padding: "13px 24px",
+    border: "none",
+    borderRadius: "8px",
+    backgroundColor: "#e6007e",
+    color: "#ffffff",
+    fontSize: "15px",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+
+  pulsanteDisabilitato: {
+    opacity: 0.6,
+    cursor: "not-allowed",
+  },
+
+  esitoImportazione: {
+    marginTop: "18px",
+    padding: "20px",
+    border: "1px solid #b9dfc2",
+    borderRadius: "10px",
+    backgroundColor: "#eef9f0",
+  },
+
+  grigliaEsito: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "18px",
+    marginTop: "12px",
   },
 
   sezioneTabella: {
