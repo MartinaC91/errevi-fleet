@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseConfig } from "@/lib/supabase";
 
 type VehicleStatus =
   | "disponibile"

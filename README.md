@@ -1,27 +1,16 @@
-# Errevi Fleet - Modulo Mezzi v1
+# Errevi Fleet - versione definitiva v1
 
-Questa versione collega la pagina **Mezzi** alla tabella `public.mezzi` di Supabase e permette:
+Prima versione stabile del modulo Mezzi, collegata a Supabase.
 
-- visualizzazione mezzi;
-- ricerca e filtro per stato;
-- inserimento;
-- modifica;
-- eliminazione;
-- normalizzazione automatica della targa (maiuscolo e senza spazi).
+## Correzioni
 
-## Aggiornamento tramite GitHub
+- SDK Supabase aggiornato per le chiavi `sb_publishable_...`.
+- Rimozione automatica di spazi, virgolette e slash finali dalle variabili Vercel.
+- Messaggio diagnostico senza mostrare la chiave completa.
 
-1. Decomprimi lo ZIP.
-2. Nel repository GitHub `MartinaC91/errevi-fleet` scegli **Add file > Upload files**.
-3. Carica il contenuto della cartella, accettando la sostituzione dei file esistenti.
-4. Esegui il commit. Vercel avvierà automaticamente un nuovo deploy.
+## Variabili Vercel
 
-## Passaggio Supabase necessario per il test
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
-Apri **Supabase > SQL Editor > New query**, incolla il contenuto di:
-
-`supabase/01-policy-test-mezzi.sql`
-
-e premi **Run**.
-
-Le policy sono esclusivamente temporanee perché il login non è ancora attivo. Prima dell'uso con dati aziendali verranno sostituite con policy basate su autenticazione e ruoli.
+Dopo il caricamento su GitHub, attendere il deploy automatico di Vercel.
